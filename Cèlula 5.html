@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="ca">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Joc Cèl·lula Animal</title>
+  <style>
+    :root{
+      --bg:#e8fdf1;
+      --panel:#ffffff;
+      --accent:#10b981;
+      --text:#0b1220;
+    }
+    html,body{
+      height:100%;
+      margin:0;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;
+      background:var(--bg);
+      color:var(--text);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      padding:18px;
+    }
+    h1{
+      font-size:2rem;
+      color:var(--accent);
+      text-align:center;
+      font-weight:800;
+      margin-bottom:20px;
+    }
+    .split{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:18px;
+      width:100%;
+      max-width:1200px;
+      height:calc(100vh - 120px);
+    }
+    .panel{
+      border-radius:14px;
+      background:var(--panel);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      position:relative;
+      padding:28px;
+      border:4px solid var(--accent);
+      box-shadow:0 8px 30px rgba(2,6,23,0.1);
+      cursor:pointer;
+      transition:transform .14s ease, box-shadow .14s ease;
+    }
+    .panel:active{transform:scale(.995);}
+    .running{box-shadow:0 12px 40px rgba(0,0,0,0.15);outline:4px solid rgba(16,185,129,0.2);}
+    .label{font-size:20px;color:var(--accent);margin-bottom:8px;font-weight:700;}
+    .time{font-size:72px;font-weight:700;letter-spacing:1px;}
+    .controls{position:absolute;bottom:18px;}
+    button{background:var(--accent);border:0;padding:10px 14px;border-radius:10px;color:white;font-weight:600;cursor:pointer;}
+    button:hover{transform:translateY(-2px);}
+    .hint{position:absolute;top:14px;left:14px;font-size:13px;color:var(--accent);}
+    #countdown{
+      position:fixed;
+      top:0;left:0;right:0;bottom:0;
+      background:rgba(255,255,255,0.8);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:8rem;
+      color:var(--accent);
+      font-weight:900;
+      z-index:999;
+      visibility:hidden;
+      transition:opacity 0.3s ease;
+      opacity:0;
+    }
+    #countdown.show{visibility:visible;opacity:1;}
+    @media (max-width:720px){
+      .split{grid-template-columns:1fr;grid-auto-rows:1fr;gap:12px;height:auto;}
+      .time{font-size:48px;}
+    }
+  </style>
+</head>
+<body>
+  <h1>ESTRUCTURA DE LA CÈL·LULA EUCARIOTA ANIMAL</h1>
+  <div class="split">
+    <article id="left" class="panel" tabindex="0">
+      <div class="hint"><b>Jugador 1:</b> ESPAI per aturar (clic també)</div>
+      <div class="label">JUGADOR 1</div>
+      <div id="time-left" class="time">00:00.000</div>
+      <div class="controls"><button id="reset-left">Reinicia</button></div>
+    </article>
+
+    <article id="right" class="panel" tabindex="0">
+      <div class="hint"><b>Jugador 2:</b> ENTER per aturar (clic també)</div>
+      <div class="label">JUGADOR 2</div>
+      <div id="time-right" class="time">00:00.000</div>
+      <div class="controls"><button id="reset-right">Reinicia</button></div>
+    </article>
+  </div>
+
+  <div id="countdown"></div>
+
+  <audio id="beep" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
+  <audio id="beepFinal" src="https://actions.google.com/sounds/v1/alarms/beep_short_off.ogg"></audio>
+
+  <script>
+    class Cronometre {
+      constructor(displayEl){
+        this.displayEl = displayEl;
+        this.running = false;
+        this.startAt = 0;
+        this.elapsed = 0;
+        this.raf = null;
+      }
+      format(ms){
+        const total = Math.floor(ms);
+        const m = Math.floor(total / 60000);
+        const s = Math.floor((total % 60000) / 1000);
+        const msPart = total % 1000;
+        return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(msPart).padStart(3,'0')}`;
+      }
+      _update = () => {
+        const now = performance.now();
+        const current = this.elapsed + (now - this.startAt);
+        this.displayEl.textContent = this.format(current);
+        this.raf = requestAnimationFrame(this._update);
+      }
+      start(){
+        if(this.running) return;
+        this.running = true;
+        this.startAt = performance.now();
+        this.raf = requestAnimationFrame(this._update);
+      }
+      stop(){
+        if(!this.running) return;
+        this.running = false;
+        cancelAnimationFrame(this.raf);
+        this.elapsed += performance.now() - this.startAt;
+        this.displayEl.textContent = this.format(this.elapsed);
+      }
+      toggle(){
+        if(this.running) this.stop(); else this.start();
+      }
+      reset(){
+        this.stop();
+        this.elapsed = 0;
+        this.displayEl.textContent = this.format(0);
+      }
+    }
+
+    const leftPanel = document.getElementById('left');
+    const rightPanel = document.getElementById('right');
+    const timeLeft = document.getElementById('time-left');
+    const timeRight = document.getElementById('time-right');
+    const countdown = document.getElementById('countdown');
+    const beep = document.getElementById('beep');
+    const beepFinal = document.getElementById('beepFinal');
+
+    const chronoLeft = new Cronometre(timeLeft);
+    const chronoRight = new Cronometre(timeRight);
+
+    function updateVisual(panel, chrono){
+      if (chrono.running) panel.classList.add('running'); else panel.classList.remove('running');
+    }
+
+    function startBoth(){
+      chronoLeft.start();
+      chronoRight.start();
+      updateVisual(leftPanel, chronoLeft);
+      updateVisual(rightPanel, chronoRight);
+    }
+
+    function stopBoth(){
+      chronoLeft.stop();
+      chronoRight.stop();
+      updateVisual(leftPanel, chronoLeft);
+      updateVisual(rightPanel, chronoRight);
+    }
+
+    async function countdownStart(){
+      let i = 5;
+      countdown.textContent = i;
+      countdown.classList.add('show');
+      for(; i>0; i--){
+        countdown.textContent = i;
+        beep.play();
+        await new Promise(r=>setTimeout(r,1000));
+      }
+      beepFinal.play();
+      countdown.textContent = "JA!";
+      await new Promise(r=>setTimeout(r,1000));
+      countdown.classList.remove('show');
+      startBoth();
+    }
+
+    leftPanel.addEventListener('click', ()=>{ chronoLeft.toggle(); updateVisual(leftPanel, chronoLeft); });
+    rightPanel.addEventListener('click', ()=>{ chronoRight.toggle(); updateVisual(rightPanel, chronoRight); });
+    document.getElementById('reset-left').addEventListener('click', (e)=>{ e.stopPropagation(); chronoLeft.reset(); updateVisual(leftPanel, chronoLeft); });
+    document.getElementById('reset-right').addEventListener('click', (e)=>{ e.stopPropagation(); chronoRight.reset(); updateVisual(rightPanel, chronoRight); });
+
+    window.addEventListener('keydown', async (ev)=>{
+      if(ev.repeat) return;
+      if(ev.code === 'Space'){
+        ev.preventDefault();
+        if(!chronoLeft.running && !chronoRight.running){
+          await countdownStart();
+        } else {
+          chronoLeft.toggle();
+          updateVisual(leftPanel, chronoLeft);
+        }
+      }
+      if(ev.code === 'Enter'){
+        ev.preventDefault();
+        chronoRight.toggle();
+        updateVisual(rightPanel, chronoRight);
+      }
+    });
+  </script>
+</body>
+</html>
